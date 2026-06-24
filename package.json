@@ -1,0 +1,21 @@
+{
+  "name": "agent-memory-os",
+  "version": "0.1.0",
+  "description": "Reusable, tool-agnostic, file-based memory layer for AI coding agents.",
+  "type": "module",
+  "bin": {
+    "agent-memory-init": "bin/agent-memory-init.mjs",
+    "agent-memory-mcp": "integrations/mcp/server.mjs"
+  },
+  "scripts": {
+    "init": "node bin/agent-memory-init.mjs",
+    "mcp": "node integrations/mcp/server.mjs"
+  },
+  "files": [
+    "bin",
+    "template",
+    "prompts",
+    "integrations"
+  ],
+  "license": "MIT"
+}

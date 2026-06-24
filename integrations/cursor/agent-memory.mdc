@@ -1,0 +1,18 @@
+---
+description: Portable file-based agent memory (agent-memory-os) — recall before acting, save durable facts, and bootstrap the store.
+globs:
+alwaysApply: false
+---
+
+# agent-memory (Cursor adapter)
+
+Copy into `.cursor/rules/`; invoke with `@agent-memory`. The procedures are the source of truth in
+`$AGENT_MEMORY_DIR/prompts/`:
+
+- Set up: `prompts/bootstrap.md`.
+- Before acting: `prompts/recall.md`.
+- On learning something durable: `prompts/save.md`.
+
+`$AGENT_MEMORY_DIR` is the `agent-memory-os` checkout (env var `AGENT_MEMORY_DIR`, a sibling path, or
+`git clone https://github.com/viryty/agent-memory-os`). Verify with
+`node scripts/memory/check-memory.mjs`.

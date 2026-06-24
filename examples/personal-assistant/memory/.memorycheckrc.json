@@ -1,0 +1,10 @@
+{
+  "memoryDir": "memory",
+  "indexFile": "MEMORY.md",
+  "ignoreFiles": ["MEMORY.md", "README.md"],
+  "types": ["user", "feedback", "project", "reference"],
+  "statuses": ["current", "archived"],
+  "requireIndex": "error",
+  "wikilinks": "warn",
+  "placeholders": { "mode": "warn", "patterns": ["{{", "TODO:"] }
+}
