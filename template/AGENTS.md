@@ -59,6 +59,8 @@ The fact, stated plainly.
 
 ## Checks
 
-- `node scripts/memory/check-memory.mjs` — validate entries, index consistency, links, review dates.
+- `node scripts/memory/check-memory.mjs` — validate entries, index consistency, links, review dates;
+  fail on malformed front matter and unresolved git conflict markers.
+- `node --test scripts/memory/check-memory.test.mjs` — the checker's own tests.
 - `node scripts/memory/check-memory.mjs --stale-only` — list memories whose `review_after` is due.
 - Config: `memory/.memorycheckrc.json` (types, index strictness, placeholders).

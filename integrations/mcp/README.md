@@ -9,7 +9,7 @@ Code/Copilot, Windsurf, Codex, ...) can recall and save memories as tool-calls â
 | Tool | What it does | Key args |
 | --- | --- | --- |
 | `memory_recall` | Return the index, or matching memories' full text | `query`, `storeDir` |
-| `memory_save` | Save/update a memory and index it | `name`, `type`, `body` (req), `title`, `hook`, `status`, `confidence`, `source`, `storeDir` |
+| `memory_save` | Save/update a memory and index it (an update keeps `created`) | `name` (kebab-slug; `memory`/`readme` reserved), `type`, `body` (req), `title`, `hook`, `source` (single line), `status` (`current`/`archived`), `confidence` (`high`/`medium`/`low`), `storeDir` |
 | `memory_list` | List memories with type/status | `storeDir` |
 | `memory_check` | Validate the store (exit 0 = pass) | `storeDir` |
 

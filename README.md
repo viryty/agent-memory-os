@@ -17,6 +17,7 @@ template/                       # the payload laid into a repo or agent home
     .memorycheckrc.json         # checker config (types, index strictness, placeholders)
   templates/                    # entry templates: user / feedback / project / reference
   scripts/memory/check-memory.mjs   # the sentinel
+  scripts/memory/check-memory.test.mjs  # its own tests (node --test)
 bin/agent-memory-init.mjs       # scaffolder (plain Node, stdlib only; --help)
 prompts/                        # canonical procedures: bootstrap / recall / save
 integrations/                   # per-tool adapters + an MCP server
@@ -33,8 +34,9 @@ examples/personal-assistant/    # worked example: a populated, green memory base
 - **Links**: relate memories with `[[slug]]`.
 
 The sentinel `check-memory.mjs` enforces: valid type/status, `name` matches the file slug, well-formed
-dates, **stale `review_after`** (so memories get re-verified), resolvable `[[wiki-links]]`, and that
-**every memory is listed in the index**. It is pure memory-governance — no code-to-docs coupling.
+dates, strict front matter (a stray line or a repeated key fails rather than being skipped), no
+unresolved git conflict markers in the store, **stale `review_after`** (so memories get
+re-verified), resolvable `[[wiki-links]]`, and that **every memory is listed in the index**. It is pure memory-governance — no code-to-docs coupling.
 
 ## Usage
 

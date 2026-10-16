@@ -9,7 +9,8 @@
   },
   "scripts": {
     "init": "node bin/agent-memory-init.mjs",
-    "mcp": "node integrations/mcp/server.mjs"
+    "mcp": "node integrations/mcp/server.mjs",
+    "test": "node --test template/scripts/memory/check-memory.test.mjs integrations/mcp/server.test.mjs"
   },
   "files": [
     "bin",

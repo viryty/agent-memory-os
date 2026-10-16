@@ -88,28 +88,51 @@ function toolSave(args = {}) {
   const storeDir = resolveStore(args);
   const { name, type, title, hook, body } = args;
   if (!name || !type || !body) return text('error: name, type and body are required', true);
-  if (/[\s/\\]/.test(name)) return text('error: name must be a kebab-slug (no spaces or slashes)', true);
+  if (typeof name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
+    return text('error: name must be a kebab-slug: lowercase letters, digits and single hyphens', true);
+  }
+  // On a case-insensitive file system (macOS, Windows) memory.md *is* MEMORY.md: saving it would
+  // overwrite the index.
+  if (['memory', 'readme'].includes(name)) {
+    return text(`error: name "${name}" is reserved — ${name}.md would overwrite the store's own file`, true);
+  }
   const allowed = ['user', 'feedback', 'project', 'reference'];
   if (!allowed.includes(type)) return text(`error: type must be one of ${allowed.join(', ')}`, true);
+  const status = args.status || 'current';
+  if (!['current', 'archived'].includes(status)) {
+    return text('error: status must be one of current, archived', true);
+  }
+  if (args.confidence && !['high', 'medium', 'low'].includes(args.confidence)) {
+    return text('error: confidence must be one of high, medium, low', true);
+  }
+  // Each of these lands on one line of the front matter or the index; a line break would forge a key.
+  for (const field of ['title', 'hook', 'source']) {
+    if (args[field] != null && /[\r\n]/.test(String(args[field]))) {
+      return text(`error: ${field} must be a single line`, true);
+    }
+  }
 
   fs.mkdirSync(storeDir, { recursive: true });
+  const filePath = path.join(storeDir, `${name}.md`);
+  const existed = fs.existsSync(filePath);
   const now = new Date();
   const review = new Date(now);
   review.setMonth(review.getMonth() + 6);
+  // An update keeps the date the memory was first created.
+  const previousCreated = existed ? frontMatter(fs.readFileSync(filePath, 'utf8')).created : '';
+  const created = /^\d{4}-\d{2}-\d{2}$/.test(previousCreated || '') ? previousCreated : isoDate(now);
   const fmLines = [
     '---',
     `name: ${name}`,
     `type: ${type}`,
-    `status: ${args.status || 'current'}`,
-    `created: ${isoDate(now)}`,
+    `status: ${status}`,
+    `created: ${created}`,
     `last_reviewed: ${isoDate(now)}`,
     `review_after: ${isoDate(review)}`,
   ];
   if (args.confidence) fmLines.push(`confidence: ${args.confidence}`);
   if (args.source) fmLines.push(`source: "${args.source}"`);
   fmLines.push('---', '', body.trim(), '');
-  const filePath = path.join(storeDir, `${name}.md`);
-  const existed = fs.existsSync(filePath);
   fs.writeFileSync(filePath, fmLines.join('\n'));
 
   // Update the index unless already referenced.
@@ -161,7 +184,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Kebab-slug id; becomes <name>.md.' },
+        name: { type: 'string', description: 'Kebab-slug id (lowercase, digits, hyphens); becomes <name>.md. "memory" and "readme" are reserved.' },
         type: { type: 'string', enum: ['user', 'feedback', 'project', 'reference'] },
         title: { type: 'string', description: 'Short title for the index line.' },
         hook: { type: 'string', description: 'One-line hook for the index.' },
