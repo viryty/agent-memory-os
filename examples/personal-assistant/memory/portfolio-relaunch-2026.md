@@ -3,8 +3,8 @@ name: portfolio-relaunch-2026
 type: project
 status: current
 created: 2026-06-23
-last_reviewed: 2026-06-23
-review_after: 2026-09-23
+last_reviewed: 2026-10-16
+review_after: 2027-01-16
 confidence: medium
 ---
 

@@ -72,16 +72,28 @@ function bucketFor(mode) {
   return mode === 'error' ? errors : mode === 'warn' ? warnings : null;
 }
 
+// Parses the small YAML-like front matter subset memories use. Only `key: value` lines, indented
+// `- item` lines under a key with an empty value, indented continuations of a block scalar
+// (`source: >`) and blank lines are accepted; anything else, or a repeated key, is a problem rather
+// than a line to skip — skipping is how a merge's conflict markers or a duplicated key would pass.
 function parseFrontMatter(content) {
   const normalized = content.replace(/^﻿/, '').replace(/\r\n/g, '\n');
   const lines = normalized.split('\n');
-  if (lines[0] !== '---') return { metadata: null, body: normalized };
+  if (lines[0] !== '---') return { metadata: null, problems: [], body: normalized };
   const endIndex = lines.findIndex((line, index) => index > 0 && line === '---');
-  if (endIndex === -1) return { metadata: null, body: normalized };
+  if (endIndex === -1) return { metadata: null, problems: [], body: normalized };
 
   const metadata = {};
+  const problems = [];
   let currentArrayKey = null;
-  for (const rawLine of lines.slice(1, endIndex)) {
+  let blockScalar = null;
+  for (let index = 1; index < endIndex; index += 1) {
+    const rawLine = lines[index];
+    if (blockScalar && (rawLine === '' || /^\s/.test(rawLine))) {
+      blockScalar.lines.push(rawLine);
+      metadata[blockScalar.key] = blockScalarValue(blockScalar);
+      continue;
+    }
     if (!rawLine.trim()) continue;
     const arrayItem = rawLine.match(/^\s+-\s*(.*)$/);
     if (arrayItem && currentArrayKey) {
@@ -89,17 +101,28 @@ function parseFrontMatter(content) {
       continue;
     }
     const kv = rawLine.match(/^([A-Za-z0-9_-]+):(?:\s*(.*))?$/);
-    if (!kv) continue;
+    if (!kv) {
+      problems.push(
+        `front matter line ${index + 1} is not \`key: value\`, a list item, or a block continuation: ${JSON.stringify(rawLine)}`,
+      );
+      continue;
+    }
     const [, key, value = ''] = kv;
+    if (Object.hasOwn(metadata, key)) {
+      problems.push(`front matter line ${index + 1} repeats key ${key}`);
+    }
+    const blockIndicator = value.trim().match(/^([|>])[+-]?$/);
+    blockScalar = blockIndicator ? { key, style: blockIndicator[1], lines: [] } : null;
     if (value === '') {
       metadata[key] = [];
       currentArrayKey = key;
     } else {
-      metadata[key] = parseScalar(value);
+      // A block scalar with no continuation lines is an empty string, not its indicator.
+      metadata[key] = blockScalar ? '' : parseScalar(value);
       currentArrayKey = null;
     }
   }
-  return { metadata, body: lines.slice(endIndex + 1).join('\n') };
+  return { metadata, problems, body: lines.slice(endIndex + 1).join('\n') };
 }
 
 function parseScalar(value) {
@@ -110,11 +133,38 @@ function parseScalar(value) {
   return t;
 }
 
+// A block scalar's text: folded `>` joins lines with spaces (a blank line becomes a line break);
+// literal `|` keeps line breaks. Chomping indicators are simplified to trimming the result.
+function blockScalarValue({ style, lines }) {
+  if (style === '>') {
+    return lines
+      .map((line) => line.trim())
+      .join('\n')
+      .replace(/\n(\n*)/g, (_, breaks) => breaks || ' ')
+      .trim();
+  }
+  const indent = Math.min(...lines.filter((line) => line.trim()).map((line) => line.search(/\S/)));
+  return lines
+    .map((line) => line.slice(indent))
+    .join('\n')
+    .trim();
+}
+
 function isValidDate(value) {
   if (typeof value !== 'string' || !DATE_PATTERN.test(value)) return false;
   const [y, m, d] = value.split('-').map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+// Lists every markdown file in the memory dir — entries, the index and the README alike.
+function listMarkdownFiles() {
+  if (!fs.existsSync(memoryDir)) return [];
+  return fs
+    .readdirSync(memoryDir, { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.md'))
+    .map((e) => e.name)
+    .sort();
 }
 
 function listEntryFiles() {
@@ -128,12 +178,13 @@ function listEntryFiles() {
 
 // --- Validators ----------------------------------------------------------------------------------
 
-function validateEntry(fileName, metadata, content) {
+function validateEntry(fileName, { metadata, problems }, content) {
   const rel = `${config.memoryDir}/${fileName}`;
   if (!metadata) {
     errors.push(`${rel}: missing front matter`);
     return;
   }
+  for (const problem of problems) errors.push(`${rel}: ${problem}`);
 
   const expectedName = fileName.replace(/\.md$/, '');
   if (!metadata.name) {
@@ -165,6 +216,25 @@ function validateEntry(fileName, metadata, content) {
   validatePlaceholders(rel, content);
   validateWikiLinks(rel, content);
   validateLocalLinks(rel, fileName, content);
+}
+
+// An unresolved git conflict: a line opening (`<<<<<<<`) or closing (`>>>>>>>`) one anywhere, and a
+// separator (`=======`, or a diff3 base `|||||||`) inside one. A bare `=======` outside a conflict is
+// a markdown setext heading underline and is left alone.
+function validateConflictMarkers(rel, content) {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  let inConflict = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const opens = /^<<<<<<<(?: |$)/.test(line);
+    const closes = /^>>>>>>>(?: |$)/.test(line);
+    const separates = inConflict && (line === '=======' || /^\|{7}(?: |$)/.test(line));
+    if (opens || closes || separates) {
+      errors.push(`${rel}:${i + 1}: unresolved git conflict marker ${JSON.stringify(line)}`);
+    }
+    if (opens) inConflict = true;
+    if (closes) inConflict = false;
+  }
 }
 
 function validatePlaceholders(rel, content) {
@@ -266,18 +336,25 @@ const entryFiles = listEntryFiles();
 
 for (const fileName of entryFiles) {
   const content = fs.readFileSync(path.join(memoryDir, fileName), 'utf8');
-  const { metadata } = parseFrontMatter(content);
+  const parsed = parseFrontMatter(content);
+  const { metadata } = parsed;
   if (staleOnly) {
     if (metadata?.status === 'current' && metadata.review_after && metadata.review_after <= todayString()) {
       warnings.push(`${config.memoryDir}/${fileName}: review_after ${metadata.review_after} is due`);
     }
     continue;
   }
-  validateEntry(fileName, metadata, content);
+  validateEntry(fileName, parsed, content);
 }
 
 if (!staleOnly) {
   validateIndex(entryFiles);
+  for (const fileName of listMarkdownFiles()) {
+    validateConflictMarkers(
+      `${config.memoryDir}/${fileName}`,
+      fs.readFileSync(path.join(memoryDir, fileName), 'utf8'),
+    );
+  }
 }
 
 finish();
